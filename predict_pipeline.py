@@ -214,6 +214,7 @@ def build_suggestions(item, agg, clean):
     if cur_combo == best_combo:
         # 이미 최고 CTR 조합 -> 유지 권장 + 더 세밀한 레버 하나를 보충 제안으로 사용
         result = [(
+            f"(현재 조합이 이미 최고 성과 조합이라 '유지 권장'으로 제시) "
             f"현재 조합({item['type']}×{item['channel']})은 학습 데이터 내 최고 CTR 조합"
             f"({cur_combo_ctr:.2f}%, n={agg['type_channel_ctr'][cur_combo][1]}건)입니다 — "
             f"포맷·채널 변경보다 현재 조합 유지를 권장합니다."
@@ -354,6 +355,32 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
     lines.append(f"- 진단 대상: `{os.path.basename(source_new_path)}` ({len(new_rows)}건)")
     lines.append("- 데이터 정제: 완전 중복 1건 제거(69건 기준) / engagement_rate·reach 결측은 컬럼 평균 대체 / has_emoji 문자열→불리언 변환")
     lines.append("- 유사도 기준: type·channel 일치(하드 필터) → topic_category(+4)·has_emoji(+2)·posting_hour(+1) 가중 점수 → 동점 시 headline_length 차이 작은 순")
+    lines.append("")
+    lines.append("## 예상 CTR 범위 산출 방식")
+    lines.append("")
+    lines.append(
+        "이 리포트는 ML 예측 모델이 아닙니다. 70건 규모 데이터로 정확한 숫자 하나를 예측하면 과적합 위험이 크므로, "
+        "유사 콘텐츠 TOP3의 실제 성과를 근거로 \"기대 범위\"를 제시하는 패턴 기반 진단 방식을 사용합니다."
+    )
+    lines.append("")
+    lines.append("- 1단계: 유사도 기준(하드필터+가중점수)으로 TOP3 선정")
+    lines.append("- 2단계: TOP3의 실제 CTR 값 확인")
+    lines.append("- 3단계: 최솟값~최댓값을 예상 CTR 범위로 제시")
+    lines.append("")
+    lines.append(
+        "TOP3 중 유사도가 낮은 후보가 섞이면 범위가 넓어지고 신뢰도가 떨어집니다. 이 경우 \"추정 CTR 범위(신뢰도 낮음)\"로 "
+        "별도 표기해 이 범위를 그대로 신뢰하지 말고 참고용으로만 활용하도록 안내합니다."
+    )
+    lines.append("")
+    lines.append("## 개선 제안 산출 방식")
+    lines.append("")
+    lines.append(
+        "개선 제안은 원칙적으로 \"현재보다 더 나은 조합/요소가 있는지\"를 과거 데이터에서 찾아 제시합니다. 다만 현재 조합이 "
+        "이미 학습 데이터 내 최고 성과 조합인 경우(예: 신규 콘텐츠 1처럼 이미 1위 조합인 경우), \"바꿀 대안이 없다\"는 사실 "
+        "자체를 유효한 데이터 기반 제안으로 간주해 \"유지 권장\"으로 명시합니다. 이 경우 1번 제안은 \"유지 권장\"으로, 2번 "
+        "제안은 포맷·채널보다 더 세부적인 조정 가능 요소(발행 시간대, 이모지, 제목 길이 등 \"세부 레버\") 중 실제 개선 여지가 "
+        "있는 항목을 찾아 보충합니다."
+    )
     lines.append("")
     lines.append("---")
     lines.append("")
