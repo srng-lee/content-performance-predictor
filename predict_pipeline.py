@@ -295,9 +295,60 @@ def print_step2_pool_check(new_rows, clean):
 
 # ---------- 리포트 생성 ----------
 
+def build_highlight(item, pool, top3, agg, confidence):
+    """이 콘텐츠에서 어떤 특별한 판단이 필요했는지를 (상황/근거/결론) 3줄로 데이터에서 도출"""
+    cur_combo = (item["type"], item["channel"])
+    best_combo = max(agg["type_channel_ctr"], key=lambda k: agg["type_channel_ctr"][k][0])
+    full_match = sum(1 for r in pool if similarity_score(r, item) == 7)
+
+    if confidence["is_low_confidence"]:
+        top_score = similarity_score(top3[0], item) if top3 else 0
+        situation = (
+            f"하드필터 통과 후보 {confidence['pool_size']}건 중 유사도 "
+            f"{LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상은 {confidence['qualified_count']}건뿐 — "
+            f"TOP3 중 일부가 억지로 채운 약한 매칭입니다."
+        )
+        evidence = (
+            f"1위 후보({top3[0]['content_id']})조차 유사도 {top_score}/7에 그치고, 나머지는 "
+            f"topic_category·has_emoji·posting_hour 대부분이 불일치합니다."
+        )
+        conclusion = "저신뢰로 자동 판정해 경고 문구와 '추정 CTR 범위(신뢰도 낮음)'를 표시했습니다."
+    elif cur_combo == best_combo:
+        combo_ctr, combo_n = agg["type_channel_ctr"][cur_combo]
+        situation = f"현재 조합({cur_combo[0]}×{cur_combo[1]})이 학습 데이터 내 전체 유형×채널 조합 중 CTR 1위입니다."
+        evidence = f"{cur_combo[0]}×{cur_combo[1]} 평균 CTR {combo_ctr:.2f}%(n={combo_n}건)로 7개 조합 중 최고."
+        conclusion = "개선 제안 1번을 '유지 권장'으로 명시하고, 2번은 세부 레버 중 실제 개선 여지가 있는 항목으로 보충했습니다."
+    else:
+        situation = (
+            f"하드필터 통과 후보 {len(pool)}건 중 완전일치(7/7) {full_match}건, 유사도 "
+            f"{LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상 {confidence['qualified_count']}건으로 매칭 풀이 두텁습니다."
+        )
+        evidence = "topic_category·has_emoji·posting_hour 축에서 다수 후보가 실제로 일치합니다."
+        conclusion = "별도 예외처리 없이 표준 로직(하드필터+가중치)만으로 안정적인 TOP3를 확보했습니다."
+
+    return situation, evidence, conclusion
+
+
 def render_report(new_rows, clean, agg, source_new_path, source_past_path):
     lines = []
     lines.append(f"# 콘텐츠 성과 예측 리포트")
+    lines.append("")
+    lines.append("## 우리가 해결해야 하는 문제")
+    lines.append("")
+    lines.append(
+        "마케터는 콘텐츠를 발행하기 전 \"반응이 어떨까\"를 감(感)으로 판단하고, 발행 후에야 성과를 확인합니다. "
+        "과거 데이터가 있어도 매번 수동으로 유사 콘텐츠를 찾아 비교하기는 번거롭습니다."
+    )
+    lines.append(
+        f"이 리포트는 신규 콘텐츠 1건마다 과거 {len(clean)}건 중 조건이 가장 비슷한 콘텐츠 TOP3를 자동으로 찾아, "
+        "그 실제 CTR로 발행 전 기대 범위를 제시합니다."
+    )
+    lines.append(
+        "유사도는 type·channel을 반드시 일치시키는 하드필터를 먼저 적용하고, 그 안에서 "
+        "topic_category(+4)·has_emoji(+2)·posting_hour(+1) 가중치로 점수를 매겨 판단합니다."
+    )
+    lines.append("")
+    lines.append("---")
     lines.append("")
     lines.append(f"- 학습 대상: `{os.path.basename(source_past_path)}` ({len(clean)}건, 중복 제거 후)")
     lines.append(f"- 진단 대상: `{os.path.basename(source_new_path)}` ({len(new_rows)}건)")
@@ -314,7 +365,15 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
         suggestions = build_suggestions(item, agg, clean)
         confidence = assess_confidence(item, pool)
 
+        situation, evidence, conclusion = build_highlight(item, pool, top3, agg, confidence)
+
         lines.append(f"## 신규 콘텐츠 {idx}: {item['title']}")
+        lines.append("")
+        lines.append("**이 콘텐츠의 특이점**")
+        lines.append("")
+        lines.append(f"- 📌 상황: {situation}")
+        lines.append(f"- 🔍 근거: {evidence}")
+        lines.append(f"- 📊 결론: {conclusion}")
         lines.append("")
         lines.append(
             f"- 조건: {item['type']} · {item['topic_category']} · {item['channel']} · "
