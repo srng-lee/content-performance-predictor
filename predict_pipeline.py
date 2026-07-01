@@ -20,6 +20,7 @@ DEFAULT_OUTPUT_PATH = os.path.join(BASE_DIR, "output", "content_prediction_repor
 
 HOURS = (8, 12, 18, 20)
 BLOG_HEADLINE_THRESHOLD = 30
+LOW_CONFIDENCE_SCORE_THRESHOLD = 2  # 하드필터 통과 후보 중 이 점수 이상이 하나도 없으면 "약한 벤치마크"로 표시
 
 
 # ---------- 1단계: 데이터 정제 ----------
@@ -138,6 +139,15 @@ def top3_similar(item, clean):
         key=lambda r: (-similarity_score(r, item), abs(r["headline_length"] - item["headline_length"])),
     )
     return pool, ranked[:3]
+
+
+def assess_confidence(item, pool):
+    """하드필터 통과 후보 중 유사도 LOW_CONFIDENCE_SCORE_THRESHOLD점 이상인 후보가 3건 미만이면
+    TOP3가 약한 후보로 채워졌다는 뜻이므로 저신뢰로 판단한다.
+    (전부 0~1점인 극단적 경우뿐 아니라, "1건만 강하고 나머지는 채우기용"인 경우도 포착하기 위해
+    기준을 "0건"이 아닌 "3건 미만"으로 잡았다 — 근거는 decisions.md 참고)"""
+    qualified = [r for r in pool if similarity_score(r, item) >= LOW_CONFIDENCE_SCORE_THRESHOLD]
+    return {"is_low_confidence": len(qualified) < 3, "qualified_count": len(qualified), "pool_size": len(pool)}
 
 
 # ---------- 3단계: 개선 제안 ----------
@@ -302,6 +312,7 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
         ctrs = [c["ctr"] for c in top3]
         ctr_min, ctr_max = min(ctrs), max(ctrs)
         suggestions = build_suggestions(item, agg, clean)
+        confidence = assess_confidence(item, pool)
 
         lines.append(f"## 신규 콘텐츠 {idx}: {item['title']}")
         lines.append("")
@@ -310,11 +321,6 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
             f"{item['posting_hour']}시 · 이모지 {'O' if item['has_emoji'] else 'X'} · 제목 {item['headline_length']}자"
         )
         lines.append(f"- 하드 필터(type×channel) 통과 후보: {len(pool)}건")
-        lines.append(f"- **예상 CTR 범위: {ctr_min:.1f}% ~ {ctr_max:.1f}%**")
-        lines.append(
-            f"  - 근거: 유사도 점수 상위 3건({', '.join(c['content_id'] for c in top3)})의 실제 CTR 최소~최대. "
-            f"점수는 topic_category·has_emoji·posting_hour 일치 여부(0~7점)로 산출."
-        )
         lines.append("")
         lines.append("**유사 콘텐츠 TOP3 비교표**")
         lines.append("")
@@ -325,6 +331,28 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
             lines.append(
                 f"| {rank} | {c['content_id']} | {c['title']} | {c['ctr']:.1f}% | "
                 f"{c['engagement_rate']:.1f}% | {score}/7 |"
+            )
+        lines.append("")
+
+        if confidence["is_low_confidence"]:
+            lines.append(
+                f"> ⚠️ **벤치마크 신뢰도 낮음**: 하드필터 통과 후보 {confidence['pool_size']}건 중 유사도 "
+                f"{LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상인 후보가 {confidence['qualified_count']}건뿐이라 "
+                f"TOP3 중 일부가 유사도가 매우 낮은 콘텐츠로 채워졌습니다. 이 신규 콘텐츠는 과거 데이터 내 "
+                f"뚜렷한 벤치마크가 부족한 케이스입니다. 아래 TOP3는 참고용이며, 신뢰도가 낮음을 고려해 발행 후 "
+                f"실제 성과를 반드시 모니터링해야 합니다."
+            )
+            lines.append("")
+            lines.append(f"- **추정 CTR 범위(신뢰도 낮음): {ctr_min:.1f}% ~ {ctr_max:.1f}%**")
+            lines.append(
+                f"  - 근거: 위 유사도 점수 상위 3건({', '.join(c['content_id'] for c in top3)})의 실제 CTR 최소~최대이나, "
+                f"이 중 유사도 {LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상은 {confidence['qualified_count']}건뿐이라 단순 참고 수치임."
+            )
+        else:
+            lines.append(f"- **예상 CTR 범위: {ctr_min:.1f}% ~ {ctr_max:.1f}%**")
+            lines.append(
+                f"  - 근거: 위 유사도 점수 상위 3건({', '.join(c['content_id'] for c in top3)})의 실제 CTR 최소~최대. "
+                f"점수는 topic_category·has_emoji·posting_hour 일치 여부(0~7점)로 산출."
             )
         lines.append("")
         lines.append("**개선 제안 (데이터 근거)**")
