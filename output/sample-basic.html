@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>콘텐츠 성과 예측 리포트 — Basic</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; background: #f4f5f7; color: #1a1a2e; line-height: 1.6; }
+.container { max-width: 1080px; margin: 0 auto; padding: 40px 24px; }
+
+.header { background: #fff; border-radius: 12px; padding: 32px 36px; margin-bottom: 24px; border-left: 5px solid #7048e8; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.level-badge { display: inline-block; background: #7048e8; color: white; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin-bottom: 14px; letter-spacing: .5px; }
+.header h1 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+.header-meta { font-size: 13px; color: #6c757d; display: flex; flex-wrap: wrap; gap: 16px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+.stat { background: #fff; border-radius: 10px; padding: 18px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-top: 4px solid; }
+.stat-n { font-size: 30px; font-weight: 800; }
+.stat-label { font-size: 12px; color: #666; margin-top: 2px; }
+.stat-sub { font-size: 11px; color: #999; margin-top: 4px; }
+.c-purple { border-color: #7048e8; color: #7048e8; }
+.c-blue { border-color: #4361ee; color: #4361ee; }
+.c-green { border-color: #2d6a4f; color: #2d6a4f; }
+.c-orange { border-color: #e8590c; color: #e8590c; }
+
+.section { background: #fff; border-radius: 12px; padding: 28px 32px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.section-title { font-size: 15px; font-weight: 700; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
+.note { font-size: 12px; color: #888; margin-bottom: 12px; }
+
+/* New content card */
+.nc-card { border: 1px solid #ececf3; border-radius: 12px; margin-bottom: 22px; overflow: hidden; }
+.nc-head { background: #faf8ff; padding: 18px 22px; border-bottom: 1px solid #eee; }
+.nc-num { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #7048e8; margin-bottom: 5px; }
+.nc-title { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+.nc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 12px; background: #eef0f5; color: #555; }
+.tag.emoji { background: #fff3bf; color: #856404; }
+.nc-body { padding: 20px 22px; }
+
+/* CTR gauge */
+.gauge-wrap { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; flex-wrap: wrap; }
+.gauge-label { font-size: 12px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.gauge-range { font-size: 28px; font-weight: 900; color: #7048e8; }
+.gauge-track { flex: 1; min-width: 200px; background: #f0f2f5; border-radius: 8px; height: 26px; position: relative; overflow: hidden; }
+.gauge-fill { position: absolute; top: 0; height: 100%; background: linear-gradient(90deg,#9775fa,#7048e8); border-radius: 8px; }
+.gauge-scale { display: flex; justify-content: space-between; font-size: 10px; color: #aaa; margin-top: 3px; }
+.gauge-basis { font-size: 12px; color: #666; margin-bottom: 16px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { background: #f8f9fa; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; padding: 9px 12px; text-align: left; border-bottom: 2px solid #e9ecef; white-space: nowrap; }
+tbody td { padding: 9px 12px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+.ctr-hi { font-weight: 800; color: #2d6a4f; }
+.ctr-mid { font-weight: 700; color: #e8590c; }
+.ctr-lo { font-weight: 700; color: #e03131; }
+.rank { font-weight: 800; color: #7048e8; }
+
+.tip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.tip { background: #f8f9fa; border-left: 3px solid #4361ee; border-radius: 0 8px 8px 0; padding: 12px 14px; }
+.tip-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #4361ee; margin-bottom: 4px; }
+.tip-body { font-size: 12.5px; color: #333; line-height: 1.55; }
+.tip-body b { color: #1a1a2e; }
+
+.dec-table td { font-size: 12.5px; vertical-align: top; }
+.dec-table td:first-child { font-weight: 600; white-space: nowrap; color: #444; }
+
+@media(max-width:700px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .tip-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <div class="level-badge">🟢 Basic — 100점</div>
+  <h1>콘텐츠 성과 예측 리포트 — 신규 5건 진단</h1>
+  <div class="header-meta">
+    <span>📊 학습: past_content_performance.csv <strong>70건 → 중복 제거 69건</strong></span>
+    <span>🎯 예측 대상: 신규 5건</span>
+    <span>✍️ 작성: [이름]</span>
+    <span>📆 2026-07-01</span>
+  </div>
+</div>
+
+<div class="stats-row">
+  <div class="stat c-purple"><div class="stat-n">69</div><div class="stat-label">학습 콘텐츠</div><div class="stat-sub">중복 C003 제거</div></div>
+  <div class="stat c-blue"><div class="stat-n">5</div><div class="stat-label">진단 대상</div><div class="stat-sub">신규 콘텐츠</div></div>
+  <div class="stat c-green"><div class="stat-n">+1.4%p</div><div class="stat-label">저녁 발행 효과</div><div class="stat-sub">20시 vs 8시 평균</div></div>
+  <div class="stat c-orange"><div class="stat-n">+1.1%p</div><div class="stat-label">이모지 효과</div><div class="stat-sub">인스타 평균</div></div>
+</div>
+
+<!-- 핵심 패턴 -->
+<div class="section">
+  <div class="section-title">🔎 데이터에서 찾은 핵심 성과 패턴 (개선 제안의 근거)</div>
+  <p class="note">⚠️ 중복 C003 제거(69건 기준) · 결측 C069(engagement_rate)·C070(reach)는 해당 지표만 제외하고 비교 · has_emoji 문자열→불리언 변환</p>
+  <div class="tip-grid">
+    <div class="tip"><div class="tip-label">발행 시간대</div><div class="tip-body">저녁(18·20시) 평균 CTR이 아침(8시) 대비 <b>약 1.4%p 높음</b>. 고CTR 콘텐츠 대부분이 18~20시 발행.</div></div>
+    <div class="tip"><div class="tip-label">이모지</div><div class="tip-body">인스타그램·유튜브에서 has_emoji=True가 False 대비 <b>약 1.1%p 높음</b>.</div></div>
+    <div class="tip"><div class="tip-label">유형 × 채널</div><div class="tip-body"><b>숏폼+유튜브</b>(평균 4.7%), <b>카드뉴스+인스타</b>(평균 4.0%)가 최상위. 블로그·인포그래픽은 중하위.</div></div>
+    <div class="tip"><div class="tip-label">제목 길이</div><div class="tip-body">블로그는 길어도 검색 유입으로 OK. <b>소셜에서 30자↑ 제목은 CTR 하락</b> 경향.</div></div>
+  </div>
+</div>
+
+<!-- 신규 콘텐츠 1 -->
+<div class="nc-card">
+  <div class="nc-head">
+    <div class="nc-num">신규 콘텐츠 ①</div>
+    <div class="nc-title">주니어 마케터 6개월 성장기</div>
+    <div class="nc-tags"><span class="tag">숏폼</span><span class="tag">커리어</span><span class="tag">유튜브</span><span class="tag">20시</span><span class="tag emoji">😀 이모지</span></div>
+  </div>
+  <div class="nc-body">
+    <div class="gauge-wrap">
+      <span class="gauge-label">예상 CTR 범위</span>
+      <span class="gauge-range">4.0% ~ 5.2%</span>
+      <div class="gauge-track"><div class="gauge-fill" style="left:57%;width:17%"></div></div>
+    </div>
+    <div class="gauge-scale" style="margin-bottom:14px"><span>0%</span><span>3.5%</span><span>7%</span></div>
+    <div class="gauge-basis">📌 근거: 유사 TOP3(숏폼·커리어·유튜브·저녁·이모지 일치)의 실제 CTR 4.0~5.2% 구간. 학습셋 최상위 그룹과 동일 조건.</div>
+    <table>
+      <thead><tr><th>순위</th><th>id</th><th>제목</th><th>CTR</th><th>인게이지먼트율</th><th>유사 이유</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">1</td><td>C002</td><td>주니어 마케터가 3개월 만에 한 일</td><td class="ctr-hi">5.2%</td><td>8.7%</td><td>5축 완전 일치</td></tr>
+        <tr><td class="rank">2</td><td>C066</td><td>마케팅 직무 연봉 현실 공개</td><td class="ctr-hi">4.5%</td><td>8.2%</td><td>5축 완전 일치</td></tr>
+        <tr><td class="rank">3</td><td>C045</td><td>비전공 취업 성공 사례 3가지</td><td class="ctr-hi">4.0%</td><td>7.6%</td><td>후기→커리어 인접, 나머지 일치</td></tr>
+      </tbody>
+    </table>
+    <div class="tip-grid">
+      <div class="tip"><div class="tip-label">개선 제안 1</div><div class="tip-body">현재 조건이 이미 최상위 그룹 → <b>유지 권장</b>. 제목 후킹만 강화 시 TOP1(5.2%) 근접 가능.</div></div>
+      <div class="tip"><div class="tip-label">개선 제안 2</div><div class="tip-body">제목 길이 15자로 짧음(양호). 숫자·결과형 표현("6개월→연봉 X") 추가 시 클릭 유인 ↑.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 신규 콘텐츠 2 -->
+<div class="nc-card">
+  <div class="nc-head">
+    <div class="nc-num">신규 콘텐츠 ②</div>
+    <div class="nc-title">노션으로 끝내는 일주일 업무 정리</div>
+    <div class="nc-tags"><span class="tag">카드뉴스</span><span class="tag">생산성</span><span class="tag">인스타그램</span><span class="tag">18시</span><span class="tag emoji">😀 이모지</span></div>
+  </div>
+  <div class="nc-body">
+    <div class="gauge-wrap">
+      <span class="gauge-label">예상 CTR 범위</span>
+      <span class="gauge-range">3.4% ~ 4.5%</span>
+      <div class="gauge-track"><div class="gauge-fill" style="left:49%;width:16%"></div></div>
+    </div>
+    <div class="gauge-scale" style="margin-bottom:14px"><span>0%</span><span>3.5%</span><span>7%</span></div>
+    <div class="gauge-basis">📌 근거: 유사 TOP3(카드뉴스·생산성·인스타·저녁·이모지)의 실제 CTR 3.4~4.5% 구간.</div>
+    <table>
+      <thead><tr><th>순위</th><th>id</th><th>제목</th><th>CTR</th><th>인게이지먼트율</th><th>유사 이유</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">1</td><td>C009</td><td>노션으로 만드는 업무 대시보드</td><td class="ctr-hi">4.5%</td><td>7.2%</td><td>5축 완전 일치</td></tr>
+        <tr><td class="rank">2</td><td>C054</td><td>업무 자동화 입문 노션 템플릿</td><td class="ctr-mid">3.9%</td><td>6.2%</td><td>5축 완전 일치</td></tr>
+        <tr><td class="rank">3</td><td>C044</td><td>현직 PM이 추천하는 협업 툴</td><td class="ctr-mid">3.4%</td><td>5.5%</td><td>5축 완전 일치</td></tr>
+      </tbody>
+    </table>
+    <div class="tip-grid">
+      <div class="tip"><div class="tip-label">개선 제안 1</div><div class="tip-body">발행을 <b>20시로 변경</b> 시 같은 조건 20시 콘텐츠 평균 CTR 4.5%(현재 18시 군 평균 3.9%) — 상단 근접.</div></div>
+      <div class="tip"><div class="tip-label">개선 제안 2</div><div class="tip-body">숫자·기간 명시("일주일", "5단계") 제목이 TOP군에서 강세 → 구체 수치 추가 권장.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 신규 콘텐츠 3 -->
+<div class="nc-card">
+  <div class="nc-head">
+    <div class="nc-num">신규 콘텐츠 ③</div>
+    <div class="nc-title">2026 디지털 마케팅 트렌드 총정리와 실무 적용 전략 가이드</div>
+    <div class="nc-tags"><span class="tag">블로그</span><span class="tag">트렌드</span><span class="tag">블로그</span><span class="tag">8시</span><span class="tag">이모지 없음</span></div>
+  </div>
+  <div class="nc-body">
+    <div class="gauge-wrap">
+      <span class="gauge-label">예상 CTR 범위</span>
+      <span class="gauge-range">2.8% ~ 4.0%</span>
+      <div class="gauge-track"><div class="gauge-fill" style="left:40%;width:17%"></div></div>
+    </div>
+    <div class="gauge-scale" style="margin-bottom:14px"><span>0%</span><span>3.5%</span><span>7%</span></div>
+    <div class="gauge-basis">📌 근거: 유사 TOP3(블로그·트렌드)의 실제 CTR 2.8~4.0%. 검색 유입형이라 CTR은 중간, 인게이지먼트는 낮은 편.</div>
+    <table>
+      <thead><tr><th>순위</th><th>id</th><th>제목</th><th>CTR</th><th>인게이지먼트율</th><th>유사 이유</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">1</td><td>C026</td><td>2026년 디지털 마케팅 트렌드 심층 분석 리포트</td><td class="ctr-mid">4.0%</td><td>4.8%</td><td>유형·주제·채널 일치</td></tr>
+        <tr><td class="rank">2</td><td>C046</td><td>트렌드 따라잡기: 숏폼 마케팅 전략</td><td class="ctr-mid">2.9%</td><td>3.6%</td><td>주제·채널 일치(시간대 12시)</td></tr>
+        <tr><td class="rank">3</td><td>C063</td><td>주말에 몰아서 보는 트렌드 모음</td><td class="ctr-lo">2.8%</td><td>3.5%</td><td>주제·채널·아침 일치</td></tr>
+      </tbody>
+    </table>
+    <div class="tip-grid">
+      <div class="tip"><div class="tip-label">개선 제안 1</div><div class="tip-body"><b>제목 단축</b>(34자→20자 내외): 소셜 동반 발행 시 30자↑ 제목은 CTR 하락. 핵심 키워드 앞배치.</div></div>
+      <div class="tip"><div class="tip-label">개선 제안 2</div><div class="tip-body">블로그 단독은 CTR 한계 → <b>카드뉴스 요약본을 인스타 저녁 발행</b> 병행 시 유입 분산(인스타 트렌드 군 평균 4.0%+).</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 신규 콘텐츠 4 -->
+<div class="nc-card">
+  <div class="nc-head">
+    <div class="nc-num">신규 콘텐츠 ④</div>
+    <div class="nc-title">수강생 취업 성과 한눈에 보기</div>
+    <div class="nc-tags"><span class="tag">인포그래픽</span><span class="tag">후기</span><span class="tag">인스타그램</span><span class="tag">18시</span><span class="tag emoji">😀 이모지</span></div>
+  </div>
+  <div class="nc-body">
+    <div class="gauge-wrap">
+      <span class="gauge-label">예상 CTR 범위</span>
+      <span class="gauge-range">3.2% ~ 3.4%</span>
+      <div class="gauge-track"><div class="gauge-fill" style="left:46%;width:3%"></div></div>
+    </div>
+    <div class="gauge-scale" style="margin-bottom:14px"><span>0%</span><span>3.5%</span><span>7%</span></div>
+    <div class="gauge-basis">📌 근거: 유사 TOP3(인포그래픽·후기/커리어·인스타·저녁·이모지)의 CTR 3.2~3.4%. 인포그래픽은 인게이지먼트(저장·공유)는 양호.</div>
+    <table>
+      <thead><tr><th>순위</th><th>id</th><th>제목</th><th>CTR</th><th>인게이지먼트율</th><th>유사 이유</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">1</td><td>C065</td><td>수료생 인터뷰: 6개월의 변화</td><td class="ctr-mid">3.4%</td><td>5.8%</td><td>5축 완전 일치</td></tr>
+        <tr><td class="rank">2</td><td>C040</td><td>수강생 취업률 성과 인포그래픽</td><td class="ctr-mid">3.3%</td><td>5.6%</td><td>5축 완전 일치</td></tr>
+        <tr><td class="rank">3</td><td>C037</td><td>연봉 인상률 데이터로 보는 직무별 비교</td><td class="ctr-mid">3.2%</td><td>5.0%</td><td>후기→커리어 인접, 나머지 일치</td></tr>
+      </tbody>
+    </table>
+    <div class="tip-grid">
+      <div class="tip"><div class="tip-label">개선 제안 1</div><div class="tip-body">인포그래픽 CTR 상한이 낮음 → <b>핵심 수치 1개를 제목에</b>("취업률 X%") 노출 시 클릭 유인 강화.</div></div>
+      <div class="tip"><div class="tip-label">개선 제안 2</div><div class="tip-body">인게이지먼트(저장·공유) 강점 활용 → 후기 숏폼(C056 4.2%)으로 리포맷 시 CTR 상향 여지.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 신규 콘텐츠 5 -->
+<div class="nc-card">
+  <div class="nc-head">
+    <div class="nc-num">신규 콘텐츠 ⑤</div>
+    <div class="nc-title">점심에 보는 AI 트렌드 요약</div>
+    <div class="nc-tags"><span class="tag">숏폼</span><span class="tag">트렌드</span><span class="tag">인스타그램</span><span class="tag">12시</span><span class="tag">이모지 없음</span></div>
+  </div>
+  <div class="nc-body">
+    <div class="gauge-wrap">
+      <span class="gauge-label">예상 CTR 범위</span>
+      <span class="gauge-range">3.0% ~ 3.6%</span>
+      <div class="gauge-track"><div class="gauge-fill" style="left:43%;width:9%"></div></div>
+    </div>
+    <div class="gauge-scale" style="margin-bottom:14px"><span>0%</span><span>3.5%</span><span>7%</span></div>
+    <div class="gauge-basis">📌 근거: 유사 TOP3(숏폼·트렌드 인접 조건). 점심·이모지 없음 조합이라 같은 포맷 저녁·이모지 대비 낮은 구간.</div>
+    <table>
+      <thead><tr><th>순위</th><th>id</th><th>제목</th><th>CTR</th><th>인게이지먼트율</th><th>유사 이유</th></tr></thead>
+      <tbody>
+        <tr><td class="rank">1</td><td>C007</td><td>AI 툴 3개로 업무 반토막</td><td class="ctr-mid">4.6%</td><td>7.5%</td><td>숏폼·트렌드·인스타 일치(저녁·이모지 차이)</td></tr>
+        <tr><td class="rank">2</td><td>C043</td><td>월요일 동기부여 한 마디</td><td class="ctr-mid">3.6%</td><td>6.3%</td><td>숏폼·인스타·아침 인접</td></tr>
+        <tr><td class="rank">3</td><td>C019</td><td>점심시간 10분 트렌드 브리핑</td><td class="ctr-mid">3.4%</td><td>5.6%</td><td>숏폼·트렌드·점심·이모지 없음 일치</td></tr>
+      </tbody>
+    </table>
+    <div class="tip-grid">
+      <div class="tip"><div class="tip-label">개선 제안 1</div><div class="tip-body"><b>이모지 추가</b>: 동일 조건 이모지 콘텐츠(C007 4.6%) vs 이모지 없음(C019 3.4%) — 약 1.2%p 차이.</div></div>
+      <div class="tip"><div class="tip-label">개선 제안 2</div><div class="tip-body"><b>20시 발행으로 변경</b>: 숏폼·트렌드 저녁 군이 점심 군보다 평균 1%p+ 높음.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Decision log -->
+<div class="section">
+  <div class="section-title">📝 의사결정 로그</div>
+  <table class="dec-table">
+    <thead><tr><th>결정 항목</th><th>선택</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td>유사도 정의</td><td>5축 일치 가중치</td><td>type·topic·channel·posting_hour·has_emoji 완전 일치에 가중. 부족 시 완화</td></tr>
+      <tr><td>조건 완화 순서</td><td>posting_hour → topic → channel</td><td>성과 영향이 큰 채널·유형을 마지막에 완화해 유사성 보존</td></tr>
+      <tr><td>중복 C003 처리</td><td>제거(69건)</td><td>content_id·전 컬럼 완전 동일 → 패턴 왜곡 방지 위해 1건만 사용</td></tr>
+      <tr><td>결측 C069·C070</td><td>해당 지표만 제외</td><td>행 자체는 유효 → engagement_rate(C069)·reach(C070)만 비교에서 제외</td></tr>
+      <tr><td>has_emoji</td><td>문자열→불리언</td><td>"True"/"False" 텍스트를 불리언으로 변환 후 매칭</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</div>
+</body>
+</html>

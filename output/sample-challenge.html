@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>콘텐츠 성과 예측 리포트 — Challenge</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; background: #f4f5f7; color: #1a1a2e; line-height: 1.6; }
+.container { max-width: 1080px; margin: 0 auto; padding: 40px 24px; }
+
+.header { background: #fff; border-radius: 12px; padding: 32px 36px; margin-bottom: 24px; border-left: 5px solid #e63946; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.level-badge { display: inline-block; background: #e63946; color: white; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin-bottom: 14px; }
+.header h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.header-meta { font-size: 13px; color: #6c757d; display: flex; flex-wrap: wrap; gap: 16px; }
+.breadcrumb { font-size: 12px; color: #aaa; margin-bottom: 10px; }
+
+.section { background: #fff; border-radius: 12px; padding: 28px 32px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.section-title { font-size: 15px; font-weight: 700; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 1px solid #eee; }
+
+.priority-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+.priority-item { background: #f8f9fa; border-radius: 8px; padding: 16px; border-top: 3px solid; }
+.priority-weight { font-size: 20px; font-weight: 800; }
+.priority-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.priority-desc { font-size: 12px; color: #555; }
+.pw-blue { border-color: #4361ee; color: #4361ee; }
+.pw-orange { border-color: #e76f51; color: #e76f51; }
+.pw-green { border-color: #2d6a4f; color: #2d6a4f; }
+
+.proposal { border-radius: 12px; border: 1px solid #e9ecef; margin-bottom: 20px; overflow: hidden; }
+.proposal-header { padding: 20px 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.proposal-meta { flex: 1; }
+.proposal-num { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 6px; }
+.proposal-title { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+.proposal-sub { font-size: 13px; color: #666; }
+.priority-badge { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 18px; min-width: 80px; text-align: center; }
+.priority-badge .pb-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+.priority-badge .pb-score { font-size: 22px; font-weight: 900; }
+.pb-p0 { background: #ffe0e3; color: #c9323e; }
+.pb-p1 { background: #fff3cd; color: #856404; }
+
+.proposal-body { padding: 0 24px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.prop-section { background: #f8f9fa; border-radius: 8px; padding: 16px; }
+.prop-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #888; margin-bottom: 8px; }
+.prop-section-body { font-size: 13px; color: #333; line-height: 1.6; }
+
+.ev-item { background: white; border-left: 3px solid #4361ee; border-radius: 0 6px 6px 0; padding: 8px 12px; margin-bottom: 6px; font-size: 12px; }
+.ev-item .vid { font-weight: 700; color: #4361ee; margin-right: 6px; }
+
+.score-breakdown { display: flex; flex-direction: column; gap: 6px; }
+.score-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.score-bar-track { background: #e9ecef; border-radius: 3px; height: 8px; flex: 1; margin: 0 10px; }
+.score-bar-fill { height: 100%; border-radius: 3px; background: #4361ee; }
+.score-val { font-weight: 700; font-size: 13px; color: #333; min-width: 34px; text-align: right; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { background: #f8f9fa; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; padding: 10px 12px; text-align: left; border-bottom: 2px solid #e9ecef; }
+tbody td { padding: 10px 12px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; }
+.b-p0 { background: #ffe0e3; color: #c9323e; }
+.b-p1 { background: #fff3cd; color: #856404; }
+
+@media(max-width:700px) {
+  .priority-grid { grid-template-columns: 1fr; }
+  .proposal-body { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <div class="breadcrumb">Basic + Standard 포함 ›</div>
+  <div class="level-badge">🔴 Challenge — 160점</div>
+  <h1>콘텐츠 성과 예측 리포트 + 발행 전략 기획안</h1>
+  <div class="header-meta">
+    <span>📊 학습 69건 · 진단 5건</span>
+    <span>📋 전략 기획안 2건 (P0·P1)</span>
+    <span>✍️ [이름] · 2026-07-01</span>
+  </div>
+</div>
+
+<!-- Priority framework -->
+<div class="section">
+  <div class="section-title">⚖️ 우선순위 판단 기준 (본인 설계)</div>
+  <div class="priority-grid">
+    <div class="priority-item pw-blue">
+      <div class="priority-weight pw-blue">40%</div>
+      <div class="priority-name">CTR 임팩트</div>
+      <div class="priority-desc">적용 시 기대 CTR 상승폭(%p). 데이터로 검증된 차이가 클수록 상.</div>
+    </div>
+    <div class="priority-item pw-orange">
+      <div class="priority-weight pw-orange">35%</div>
+      <div class="priority-name">적용 범위</div>
+      <div class="priority-desc">전체 콘텐츠 중 몇 %에 적용 가능한가. 시간대·이모지는 전 콘텐츠 적용 = 상.</div>
+    </div>
+    <div class="priority-item pw-green">
+      <div class="priority-weight pw-green">25%</div>
+      <div class="priority-name">실행 난이도</div>
+      <div class="priority-desc">제작·운영 비용. 시간대 변경=쉬움, 포맷 전환=중, 신규 채널=어려움.</div>
+    </div>
+  </div>
+  <p style="font-size:13px;color:#666">진단 5건에서 반복된 손실 요인(점심·아침 발행, 이모지 누락, 과도한 제목 길이)은 단발 수정이 아니라 콘텐츠 캘린더 전반의 규칙으로 바꿔야 누적 효과가 난다. CTR 상승폭·적용 범위·실행 난이도 3축으로 점수화해 우선순위를 정했다.</p>
+</div>
+
+<!-- Proposal 1 -->
+<div class="proposal">
+  <div class="proposal-header" style="background:#fff8f8;border-bottom:1px solid #eee">
+    <div class="proposal-meta">
+      <div class="proposal-num">기획안 01</div>
+      <div class="proposal-title">저녁 발행 + 이모지 제목을 콘텐츠 캘린더 기본값으로</div>
+      <div class="proposal-sub">소셜(인스타·유튜브) 콘텐츠의 발행 시간·제목 규칙을 데이터 최적값으로 표준화</div>
+    </div>
+    <div class="priority-badge pb-p0">
+      <div class="pb-label">Priority</div>
+      <div class="pb-score">P0</div>
+    </div>
+  </div>
+  <div class="proposal-body">
+    <div>
+      <div class="prop-section">
+        <div class="prop-section-title">문제 정의</div>
+        <div class="prop-section-body">진단 5건 중 ②③⑤가 점심·아침 발행 또는 이모지 누락으로 같은 조건 최적군 대비 CTR이 낮게 예측됨. 학습셋에서도 점심·아침·이모지 없음 콘텐츠가 저CTR 구간에 몰려 있음 — 개별 콘텐츠 문제가 아닌 발행 규칙의 문제.</div>
+      </div>
+      <div class="prop-section" style="margin-top:12px">
+        <div class="prop-section-title">전략 제안</div>
+        <div class="prop-section-body">
+          • 소셜 콘텐츠 기본 발행 시간을 <b>18~20시</b>로 고정<br>
+          • 인스타·유튜브 제목에 <b>이모지 1개 + 숫자/결과형 키워드</b> 가이드 의무화<br>
+          • 콘텐츠 캘린더 템플릿에 시간·이모지 체크박스 내장
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="prop-section">
+        <div class="prop-section-title">근거 데이터</div>
+        <div>
+          <div class="ev-item"><span class="vid">시간대</span>저녁(18·20) 평균 CTR이 아침(8) 대비 약 1.4%p 높음 (학습 69건)</div>
+          <div class="ev-item"><span class="vid">이모지</span>인스타 동일 조건 이모지 vs 없음 약 1.1%p 차이 (예: C007 4.6% vs C019 3.4%)</div>
+          <div class="ev-item"><span class="vid">진단</span>신규 ⑤ 이모지+저녁 적용 시 3.0~3.6% → 4%대 진입 여지</div>
+        </div>
+      </div>
+      <div class="prop-section" style="margin-top:12px">
+        <div class="prop-section-title">우선순위 계산</div>
+        <div class="score-breakdown">
+          <div class="score-row"><span>CTR 임팩트 (40%)</span><div class="score-bar-track"><div class="score-bar-fill" style="width:88%"></div></div><span class="score-val">35/40</span></div>
+          <div class="score-row"><span>적용 범위 (35%)</span><div class="score-bar-track"><div class="score-bar-fill" style="width:100%"></div></div><span class="score-val">35/35</span></div>
+          <div class="score-row"><span>실행 난이도 (25%)</span><div class="score-bar-track"><div class="score-bar-fill" style="width:100%"></div></div><span class="score-val">25/25</span></div>
+          <div class="score-row" style="font-weight:700;font-size:14px;margin-top:4px"><span>총점</span><div class="score-bar-track"><div class="score-bar-fill" style="width:95%;background:#e63946"></div></div><span class="score-val" style="color:#e63946">95점</span></div>
+        </div>
+        <p style="font-size:11px;color:#888;margin-top:6px">전 콘텐츠 즉시 적용 + 제작 비용 0 → 최우선</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Proposal 2 -->
+<div class="proposal">
+  <div class="proposal-header" style="background:#fffdf0;border-bottom:1px solid #eee">
+    <div class="proposal-meta">
+      <div class="proposal-num">기획안 02</div>
+      <div class="proposal-title">블로그·인포그래픽을 숏폼/카드뉴스로 리포맷하는 멀티 발행</div>
+      <div class="proposal-sub">CTR 상한이 낮은 포맷의 핵심을 고CTR 포맷으로 재가공해 인스타 저녁 동시 발행</div>
+    </div>
+    <div class="priority-badge pb-p1">
+      <div class="pb-label">Priority</div>
+      <div class="pb-score">P1</div>
+    </div>
+  </div>
+  <div class="proposal-body">
+    <div>
+      <div class="prop-section">
+        <div class="prop-section-title">문제 정의</div>
+        <div class="prop-section-body">진단 ③(블로그·트렌드)·④(인포그래픽·후기)는 포맷 특성상 CTR 상한이 낮음(2.8~4.0%, 3.2~3.4%). 콘텐츠 자체는 좋지만 도달·클릭이 포맷에 갇혀 있음. 학습셋에서 같은 주제라도 숏폼·카드뉴스 포맷이 더 높은 CTR.</div>
+      </div>
+      <div class="prop-section" style="margin-top:12px">
+        <div class="prop-section-title">전략 제안</div>
+        <div class="prop-section-body">
+          • 블로그 트렌드 글 → <b>핵심 3포인트 카드뉴스</b>로 요약, 인스타 저녁 발행<br>
+          • 인포그래픽 후기 → <b>30초 숏폼</b>으로 리포맷(수치 1개 후킹)<br>
+          • 원본은 SEO 유입, 리포맷본은 소셜 클릭 — 채널별 역할 분리
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="prop-section">
+        <div class="prop-section-title">근거 데이터</div>
+        <div>
+          <div class="ev-item"><span class="vid">③</span>블로그 트렌드 2.8~4.0% vs 인스타 트렌드 카드뉴스 군 4.0%+</div>
+          <div class="ev-item"><span class="vid">④</span>인포그래픽 후기 3.2~3.4% vs 후기 숏폼(C056) 4.2%</div>
+          <div class="ev-item"><span class="vid">패턴</span>숏폼+유튜브/인스타가 학습셋 최상위 CTR 그룹</div>
+        </div>
+      </div>
+      <div class="prop-section" style="margin-top:12px">
+        <div class="prop-section-title">우선순위 계산</div>
+        <div class="score-breakdown">
+          <div class="score-row"><span>CTR 임팩트 (40%)</span><div class="score-bar-track"><div class="score-bar-fill" style="width:100%"></div></div><span class="score-val">40/40</span></div>
+          <div class="score-row"><span>적용 범위 (35%)</span><div class="score-bar-track"><div class="score-bar-fill" style="width:57%"></div></div><span class="score-val">20/35</span></div>
+          <div class="score-row"><span>실행 난이도 (25%)</span><div class="score-bar-track"><div class="score-bar-fill" style="width:40%"></div></div><span class="score-val">10/25</span></div>
+          <div class="score-row" style="font-weight:700;font-size:14px;margin-top:4px"><span>총점</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:#856404"></div></div><span class="score-val" style="color:#856404">70점</span></div>
+        </div>
+        <p style="font-size:11px;color:#888;margin-top:6px">효과는 크나 제작 공수↑·적용 콘텐츠 한정 → P1</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Roadmap -->
+<div class="section">
+  <div class="section-title">🗺️ 발행 전략 로드맵 요약</div>
+  <table>
+    <thead><tr><th>우선순위</th><th>전략</th><th>핵심 데이터 근거</th><th>권장 시점</th><th>기대 효과</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="badge b-p0">P0</span></td>
+        <td><strong>저녁 발행 + 이모지 표준화</strong></td>
+        <td>시간대 +1.4%p, 이모지 +1.1%p</td>
+        <td>이번 주 즉시</td>
+        <td>전 소셜 콘텐츠 평균 CTR 1%p+ 상승</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-p1">P1</span></td>
+        <td><strong>블로그·인포그래픽 멀티 발행 리포맷</strong></td>
+        <td>동일 주제 숏폼/카드뉴스 CTR 우위</td>
+        <td>2주 내 파일럿</td>
+        <td>저CTR 포맷 콘텐츠 도달·클릭 보완</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</div>
+</body>
+</html>
