@@ -317,42 +317,62 @@ def print_step2_pool_check(new_rows, clean):
 
 # ---------- 리포트 생성 ----------
 
+def describe_match_axes(candidate, item):
+    """두 콘텐츠가 주제·이모지·발행시간 중 무엇이 같은지 사람이 읽는 말로 설명"""
+    matched = []
+    if candidate["topic_category"] == item["topic_category"]:
+        matched.append("주제")
+    if candidate["has_emoji"] == item["has_emoji"]:
+        matched.append("이모지 유무")
+    if candidate["posting_hour"] == item["posting_hour"]:
+        matched.append("발행 시간")
+    if not matched:
+        return "형식(유형·채널) 말고는 겹치는 조건이 없었고"
+    if len(matched) == 3:
+        return "주제·이모지 유무·발행 시간까지 전부 같았고"
+    return "·".join(matched) + "만 같았고"
+
+
 def build_highlight(item, pool, top3, agg, confidence):
-    """이 콘텐츠에서 어떤 특별한 판단이 필요했는지를 (상황/근거/결론) 3줄로 데이터에서 도출"""
+    """이 콘텐츠에서 어떤 특별한 판단이 필요했는지를 (상황/근거/결론) 3줄로, 아직 안 나온 내용을
+    미리 언급하지 않고 그 자체로 이해되는 말로 설명한다."""
     cur_combo = (item["type"], item["channel"])
     best_combo = max(agg["type_channel_ctr"], key=lambda k: agg["type_channel_ctr"][k][0])
     full_match = sum(1 for r in pool if similarity_score(r, item) == 7)
 
     if confidence["reason"] == "insufficient_pool":
-        situation = (
-            f"하드필터 통과 후보가 {confidence['pool_size']}건뿐이라 TOP3를 채우지 못했습니다."
-        )
-        evidence = "과거 데이터 내 이 조합(type×channel) 자체가 드뭅니다 — 후보 품질이 아니라 표본 자체가 부족한 경우입니다."
-        conclusion = "저신뢰로 자동 판정해 경고 문구와 '추정 CTR 범위(신뢰도 낮음)'를 표시했습니다."
+        situation = f"이 조합과 똑같은 과거 콘텐츠가 {confidence['pool_size']}건밖에 없어서, 비교할 대상 자체가 부족했습니다."
+        evidence = "콘텐츠 품질이 낮아서가 아니라, 이 유형·채널 조합으로 과거에 발행된 콘텐츠 자체가 원래 드물었습니다."
+        conclusion = "그래서 아래 비교 결과는 참고 정도로만 보고, 발행 후 실제 성과를 꼭 확인해보는 게 좋습니다."
     elif confidence["reason"] == "low_similarity":
-        top_score = similarity_score(top3[0], item) if top3 else 0
+        match_desc = describe_match_axes(top3[0], item) if top3 else "조건이 거의 겹치지 않았고"
         situation = (
-            f"하드필터 통과 후보 {confidence['pool_size']}건 중 유사도 "
-            f"{LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상은 {confidence['qualified_count']}건뿐 — "
-            f"TOP3 중 일부가 억지로 채운 약한 매칭입니다."
+            f"비슷한 형식의 과거 콘텐츠가 {confidence['pool_size']}건 있었지만, 그중 조건까지 진짜 "
+            f"비슷하다고 볼 수 있는 건 {confidence['qualified_count']}건뿐이었습니다."
         )
-        evidence = (
-            f"1위 후보({top3[0]['content_id']})조차 유사도 {top_score}/7에 그치고, 나머지는 "
-            f"topic_category·has_emoji·posting_hour 대부분이 불일치합니다."
-        )
-        conclusion = "저신뢰로 자동 판정해 경고 문구와 '추정 CTR 범위(신뢰도 낮음)'를 표시했습니다."
+        evidence = f"제일 비슷했던 콘텐츠({top3[0]['content_id']})조차 {match_desc}, 나머지 후보는 그마저도 맞지 않았습니다."
+        conclusion = "그래서 아래 예상 범위는 참고용으로만 보고, 발행 후 실제 성과를 꼭 확인해야 합니다."
     elif cur_combo == best_combo:
         combo_ctr, combo_n = agg["type_channel_ctr"][cur_combo]
-        situation = f"현재 조합({cur_combo[0]}×{cur_combo[1]})이 학습 데이터 내 전체 유형×채널 조합 중 CTR 1위입니다."
-        evidence = f"{cur_combo[0]}×{cur_combo[1]} 평균 CTR {combo_ctr:.2f}%(n={combo_n}건)로 7개 조합 중 최고."
-        conclusion = "개선 제안 1번을 '유지 권장'으로 명시하고, 2번은 세부 레버 중 실제 개선 여지가 있는 항목으로 보충했습니다."
+        situation = f"이 콘텐츠는 {cur_combo[0]}×{cur_combo[1]} 형식인데, 이 조합이 과거 데이터 전체에서 CTR이 가장 높았던 조합이었습니다."
+        evidence = f"{cur_combo[0]}×{cur_combo[1]} 콘텐츠(과거 {combo_n}건)의 평균 CTR은 {combo_ctr:.2f}%로, 다른 어떤 형식·채널 조합보다 높았습니다."
+        conclusion = "그래서 형식이나 채널을 바꾸라고 제안하기보다, 발행 시간처럼 더 세밀한 부분을 조정하는 쪽으로 방향을 잡았습니다."
     else:
-        situation = (
-            f"하드필터 통과 후보 {len(pool)}건 중 완전일치(7/7) {full_match}건, 유사도 "
-            f"{LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상 {confidence['qualified_count']}건으로 매칭 풀이 두텁습니다."
-        )
-        evidence = "topic_category·has_emoji·posting_hour 축에서 다수 후보가 실제로 일치합니다."
-        conclusion = "별도 예외처리 없이 표준 로직(하드필터+가중치)만으로 안정적인 TOP3를 확보했습니다."
+        if full_match > 0:
+            evidence = f"그중 {full_match}건은 주제·이모지 유무·발행 시간까지 전부 똑같아서 거의 쌍둥이 콘텐츠라고 볼 수 있었습니다."
+        else:
+            evidence = "주제·이모지 유무·발행 시간 중 여러 조건이 겹치는 콘텐츠가 다수 있었습니다."
+        if confidence["qualified_count"] == len(pool):
+            situation = (
+                f"이 콘텐츠와 형식(유형·채널)이 같은 과거 콘텐츠가 {len(pool)}건 있었는데, 전부 조건까지 "
+                f"비슷해서 비교할 근거가 충분했습니다."
+            )
+        else:
+            situation = (
+                f"이 콘텐츠와 형식(유형·채널)이 같은 과거 콘텐츠가 {len(pool)}건 있었는데, 그중 "
+                f"{confidence['qualified_count']}건은 조건까지 비슷해서 비교할 근거가 충분했습니다."
+            )
+        conclusion = "그래서 별다른 예외 처리 없이 일반적인 방식 그대로 비교해도 믿을 만한 결과가 나왔습니다."
 
     return situation, evidence, conclusion
 
@@ -372,8 +392,8 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
         "그 실제 CTR로 발행 전 기대 범위를 제시합니다."
     )
     lines.append(
-        "유사도는 type·channel을 반드시 일치시키는 하드필터를 먼저 적용하고, 그 안에서 "
-        "topic_category(+4)·has_emoji(+2)·posting_hour(+1) 가중치로 점수를 매겨 판단합니다."
+        "유사도는 먼저 콘텐츠 유형(type)과 채널(channel)이 완전히 같은 콘텐츠만 후보로 골라낸 뒤, 그중에서 "
+        "주제·이모지 유무·발행 시간이 얼마나 겹치는지로 순위를 매겨 판단합니다(자세한 가중치는 아래 '유사도 기준' 참고)."
     )
     lines.append("")
     lines.append("---")
@@ -386,27 +406,27 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
     lines.append("## 예상 CTR 범위 산출 방식")
     lines.append("")
     lines.append(
-        "이 리포트는 ML 예측 모델이 아닙니다. 70건 규모 데이터로 정확한 숫자 하나를 예측하면 과적합 위험이 크므로, "
-        "유사 콘텐츠 TOP3의 실제 성과를 근거로 \"기대 범위\"를 제시하는 패턴 기반 진단 방식을 사용합니다."
+        "이 리포트는 ML 예측 모델이 아닙니다. 70건 규모의 적은 데이터로 정확한 숫자 하나를 콕 집어 예측하면 오히려 "
+        "믿기 어려우므로, 조건이 비슷한 과거 콘텐츠들의 실제 성과를 근거로 \"이 정도 범위에서 나올 것이다\"라고 "
+        "제시하는 방식을 씁니다."
     )
     lines.append("")
-    lines.append("- 1단계: 유사도 기준(하드필터+가중점수)으로 TOP3 선정")
-    lines.append("- 2단계: TOP3의 실제 CTR 값 확인")
-    lines.append("- 3단계: 최솟값~최댓값을 예상 CTR 범위로 제시")
+    lines.append("- 1단계: 조건이 가장 비슷한 과거 콘텐츠 3개(TOP3)를 찾습니다")
+    lines.append("- 2단계: 그 3개의 실제 CTR을 확인합니다")
+    lines.append("- 3단계: 가장 낮은 값 ~ 가장 높은 값을 예상 범위로 제시합니다")
     lines.append("")
     lines.append(
-        "TOP3 중 유사도가 낮은 후보가 섞이면 범위가 넓어지고 신뢰도가 떨어집니다. 이 경우 \"추정 CTR 범위(신뢰도 낮음)\"로 "
-        "별도 표기해 이 범위를 그대로 신뢰하지 말고 참고용으로만 활용하도록 안내합니다."
+        "TOP3에 조건이 별로 안 비슷한 콘텐츠가 섞여 들어가면 범위가 넓어지고 믿을 만함이 떨어집니다. 이런 경우에는 "
+        "범위 이름 앞에 \"신뢰도 낮음\"이라는 표시를 따로 붙여서, 이 숫자를 그대로 믿기보다 참고만 하도록 안내합니다."
     )
     lines.append("")
     lines.append("## 개선 제안 산출 방식")
     lines.append("")
     lines.append(
-        "개선 제안은 원칙적으로 \"현재보다 더 나은 조합/요소가 있는지\"를 과거 데이터에서 찾아 제시합니다. 다만 현재 조합이 "
-        "이미 학습 데이터 내 최고 성과 조합인 경우(예: 신규 콘텐츠 1처럼 이미 1위 조합인 경우), \"바꿀 대안이 없다\"는 사실 "
-        "자체를 유효한 데이터 기반 제안으로 간주해 \"유지 권장\"으로 명시합니다. 이 경우 1번 제안은 \"유지 권장\"으로, 2번 "
-        "제안은 포맷·채널보다 더 세부적인 조정 가능 요소(발행 시간대, 이모지, 제목 길이 등 \"세부 레버\") 중 실제 개선 여지가 "
-        "있는 항목을 찾아 보충합니다."
+        "개선 제안은 기본적으로 \"지금보다 더 좋은 형식이나 시간대·이모지 조합이 있는지\"를 과거 데이터에서 찾아 "
+        "제시합니다. 다만 지금 형식·채널 조합이 이미 과거 데이터에서 가장 성과가 좋았던 조합이라면, 억지로 다른 "
+        "대안을 만들지 않고 \"지금 그대로 유지하는 게 좋다\"는 것 자체를 하나의 제안으로 봅니다. 이런 경우에는 발행 "
+        "시간, 이모지, 제목 길이처럼 더 세밀하게 조정할 수 있는 부분을 찾아 나머지 제안을 채웁니다."
     )
     lines.append("")
     lines.append("---")
@@ -449,35 +469,34 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
 
         if confidence["reason"] == "insufficient_pool":
             lines.append(
-                f"> ⚠️ **벤치마크 신뢰도 낮음**: 하드필터 통과 후보가 {confidence['pool_size']}건뿐이라 TOP3를 "
-                f"채우지 못했습니다. 과거 데이터 내 이 조합 자체가 드뭅니다. 아래는 참고용이며, 신뢰도가 낮음을 "
-                f"고려해 발행 후 실제 성과를 반드시 모니터링해야 합니다."
+                f"> ⚠️ **벤치마크 신뢰도 낮음**: 이 조합과 형식이 같은 과거 콘텐츠가 {confidence['pool_size']}건뿐이라 "
+                f"TOP3를 다 채우지 못했습니다. 콘텐츠가 나빠서가 아니라 비교할 대상 자체가 원래 적은 것입니다. "
+                f"위 표는 참고용이며, 발행 후 실제 성과를 꼭 확인해보길 권합니다."
             )
             lines.append("")
             lines.append(f"- **추정 CTR 범위(신뢰도 낮음): {ctr_min:.1f}% ~ {ctr_max:.1f}%**")
             lines.append(
-                f"  - 근거: 하드필터 통과 후보 {len(top3)}건({', '.join(c['content_id'] for c in top3)})의 실제 "
-                f"CTR 최소~최대이나, TOP3를 채울 만큼 후보가 충분하지 않아 단순 참고 수치임."
+                f"  - 근거: 비교할 수 있었던 {len(top3)}건({', '.join(c['content_id'] for c in top3)})의 실제 CTR 중 "
+                f"가장 낮은 값과 높은 값입니다. 다만 비교 대상 자체가 적어서 참고용으로만 봐주세요."
             )
         elif confidence["reason"] == "low_similarity":
             lines.append(
-                f"> ⚠️ **벤치마크 신뢰도 낮음**: 하드필터 통과 후보 {confidence['pool_size']}건 중 유사도 "
-                f"{LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상인 후보가 {confidence['qualified_count']}건뿐이라 "
-                f"TOP3 중 일부가 유사도가 매우 낮은 콘텐츠로 채워졌습니다. 이 신규 콘텐츠는 과거 데이터 내 "
-                f"뚜렷한 벤치마크가 부족한 케이스입니다. 아래 TOP3는 참고용이며, 신뢰도가 낮음을 고려해 발행 후 "
-                f"실제 성과를 반드시 모니터링해야 합니다."
+                f"> ⚠️ **벤치마크 신뢰도 낮음**: 형식이 같은 과거 콘텐츠 {confidence['pool_size']}건 중에서 조건까지 "
+                f"진짜 비슷한 콘텐츠는 {confidence['qualified_count']}건뿐이었습니다. 그래서 위 표에는 조건이 크게 "
+                f"다른 콘텐츠도 참고삼아 끼워 넣었습니다 — 이 신규 콘텐츠는 과거 데이터에서 뚜렷하게 비교할 대상을 "
+                f"찾기 어려운 경우입니다. 아래 범위는 참고용이며, 발행 후 실제 성과를 꼭 확인해보길 권합니다."
             )
             lines.append("")
             lines.append(f"- **추정 CTR 범위(신뢰도 낮음): {ctr_min:.1f}% ~ {ctr_max:.1f}%**")
             lines.append(
-                f"  - 근거: 위 유사도 점수 상위 3건({', '.join(c['content_id'] for c in top3)})의 실제 CTR 최소~최대이나, "
-                f"이 중 유사도 {LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상은 {confidence['qualified_count']}건뿐이라 단순 참고 수치임."
+                f"  - 근거: 위 표 3건의 실제 CTR 중 가장 낮은 값과 높은 값이지만, 이 중 조건까지 진짜 비슷한 콘텐츠는 "
+                f"{confidence['qualified_count']}건뿐이라 참고용으로만 봐주세요."
             )
         else:
             lines.append(f"- **예상 CTR 범위: {ctr_min:.1f}% ~ {ctr_max:.1f}%**")
             lines.append(
-                f"  - 근거: 위 유사도 점수 상위 3건({', '.join(c['content_id'] for c in top3)})의 실제 CTR 최소~최대. "
-                f"점수는 topic_category·has_emoji·posting_hour 일치 여부(0~7점)로 산출."
+                f"  - 근거: 위 표에서 조건이 가장 비슷했던 콘텐츠 {len(top3)}개의 실제 CTR 중 가장 낮은 값과 "
+                f"높은 값입니다."
             )
         lines.append("")
         lines.append("**개선 제안 (데이터 근거)**")
@@ -494,9 +513,9 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
     lines.append("## 종합 코멘트")
     lines.append("")
     lines.append(
-        "- 저녁(18·20시) 발행과 이모지 사용은 채널 전반에서 CTR을 끌어올리는 방향으로 일관되게 나타남.\n"
-        "- 블로그는 제목이 30자를 넘어가는 순간 CTR이 큰 폭으로 하락하므로 검색 키워드 중심으로 축약이 필요.\n"
-        "- 상세 수치 근거와 조건 완화 순서는 `decisions.md`에 기록되어 있음."
+        "- 저녁(18~20시)에 발행하고 제목에 이모지를 넣으면, 채널과 상관없이 대체로 CTR이 더 높게 나타났습니다.\n"
+        "- 블로그는 제목이 30자를 넘어가는 순간부터 CTR이 크게 떨어지므로, 검색 키워드 위주로 제목을 짧게 쓰는 게 좋습니다.\n"
+        "- 더 자세한 수치와 판단 기준은 `decisions.md`에 정리해두었습니다."
     )
     lines.append("")
     return "\n".join(lines)
