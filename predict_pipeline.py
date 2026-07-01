@@ -21,6 +21,13 @@ DEFAULT_OUTPUT_PATH = os.path.join(BASE_DIR, "output", "content_prediction_repor
 HOURS = (8, 12, 18, 20)
 BLOG_HEADLINE_THRESHOLD = 30
 LOW_CONFIDENCE_SCORE_THRESHOLD = 2  # 하드필터 통과 후보 중 이 점수 이상이 하나도 없으면 "약한 벤치마크"로 표시
+SMALL_SAMPLE_THRESHOLD = 5  # 이 값 미만인 n은 "표본이 적어 참고용" 캡션을 붙임
+
+
+def fmt_n(n):
+    if n < SMALL_SAMPLE_THRESHOLD:
+        return f"n={n}건, 표본이 적어 참고용"
+    return f"n={n}건"
 
 
 # ---------- 1단계: 데이터 정제 ----------
@@ -104,7 +111,7 @@ def compute_aggregates(clean):
     blog_long = [r["ctr"] for r in blog if r["headline_length"] >= BLOG_HEADLINE_THRESHOLD]
 
     return {
-        "hour_ctr": {h: avg(v) for h, v in hour_ctr.items()},
+        "hour_ctr": {h: (avg(v), len(v)) for h, v in hour_ctr.items()},
         "emoji_ctr": {e: avg(v) for e, v in emoji_ctr.items()},
         "type_channel_ctr": {k: (avg(v), len(v)) for k, v in type_channel_ctr.items()},
         "channel_hour_ctr": {k: (avg(v), len(v)) for k, v in channel_hour_ctr.items()},
@@ -197,11 +204,23 @@ def _detail_candidates(item, agg):
             cur_ctr, cur_n = cur_hour_stat
             delta = best_ctr - cur_ctr
             if delta > 0:
-                candidates.append((delta, (
+                sentence = (
                     f"발행 시간을 {best_hour}시로 변경할 경우, 동일 채널({ch})의 {best_hour}시 평균 CTR은 "
-                    f"{best_ctr:.2f}%(n={best_n}건)로, 현재 {item['posting_hour']}시 평균 CTR "
-                    f"{cur_ctr:.2f}%(n={cur_n}건)보다 +{delta:.2f}%p 높습니다."
-                )))
+                    f"{best_ctr:.2f}%({fmt_n(best_n)})로, 현재 {item['posting_hour']}시 평균 CTR "
+                    f"{cur_ctr:.2f}%({fmt_n(cur_n)})보다 +{delta:.2f}%p 높습니다."
+                )
+                # 표본이 작은 상태에서, 채널 단위보다 넓은 전체 콘텐츠 기준 시간대 효과와 방향이
+                # 엇갈리면(=이 조합에서만 보이는 우연한 패턴일 가능성) 참고용이라는 점을 명시한다.
+                overall_best = agg["hour_ctr"].get(best_hour)
+                overall_cur = agg["hour_ctr"].get(item["posting_hour"])
+                if (min(best_n, cur_n) < SMALL_SAMPLE_THRESHOLD and overall_best and overall_cur
+                        and overall_best[0] < overall_cur[0]):
+                    sentence += (
+                        f" 다만 전체 콘텐츠 기준으로는 오히려 {item['posting_hour']}시"
+                        f"({overall_cur[0]:.2f}%)가 {best_hour}시({overall_best[0]:.2f}%)보다 높게 나타나 "
+                        f"방향성이 엇갈리므로, 이 수치는 참고용으로만 활용하는 것이 안전합니다."
+                    )
+                candidates.append((delta, sentence))
 
     emo_true = agg["channel_emoji_ctr"].get((ch, True))
     emo_false = agg["channel_emoji_ctr"].get((ch, False))
@@ -210,7 +229,7 @@ def _detail_candidates(item, agg):
         if delta > 0:
             candidates.append((delta, (
                 f"제목에 이모지를 추가할 경우, 동일 채널({ch})의 이모지 포함 평균 CTR은 "
-                f"{emo_true[0]:.2f}%(n={emo_true[1]}건)로, 미포함 평균 CTR {emo_false[0]:.2f}%(n={emo_false[1]}건)"
+                f"{emo_true[0]:.2f}%({fmt_n(emo_true[1])})로, 미포함 평균 CTR {emo_false[0]:.2f}%({fmt_n(emo_false[1])})"
                 f"보다 +{delta:.2f}%p 높습니다."
             )))
 
@@ -222,12 +241,18 @@ def _detail_candidates(item, agg):
             if delta > 0:
                 candidates.append((delta, (
                     f"제목을 {BLOG_HEADLINE_THRESHOLD}자 미만으로 축약할 경우, 블로그 짧은 제목의 평균 CTR은 "
-                    f"{short_avg:.2f}%(n={short_n}건)로, {BLOG_HEADLINE_THRESHOLD}자 이상 제목의 평균 CTR "
-                    f"{long_avg:.2f}%(n={long_n}건)보다 +{delta:.2f}%p 높습니다."
+                    f"{short_avg:.2f}%({fmt_n(short_n)})로, {BLOG_HEADLINE_THRESHOLD}자 이상 제목의 평균 CTR "
+                    f"{long_avg:.2f}%({fmt_n(long_n)})보다 +{delta:.2f}%p 높습니다."
                 )))
 
     candidates.sort(key=lambda c: -c[0])
     return candidates
+
+
+def second_best_combo(agg, cur_combo):
+    """현재 조합을 제외한 type×channel 조합 중 평균 CTR이 가장 높은 조합(격차 근거용)"""
+    combos = [(k, v) for k, v in agg["type_channel_ctr"].items() if k != cur_combo]
+    return max(combos, key=lambda kv: kv[1][0])
 
 
 def build_suggestions(item, agg, clean):
@@ -235,14 +260,17 @@ def build_suggestions(item, agg, clean):
 
     cur_combo = (item["type"], item["channel"])
     best_combo = max(agg["type_channel_ctr"], key=lambda k: agg["type_channel_ctr"][k][0])
-    cur_combo_ctr = agg["type_channel_ctr"].get(cur_combo, (None, 0))[0]
+    cur_combo_ctr, cur_combo_n = agg["type_channel_ctr"].get(cur_combo, (None, 0))
 
     if cur_combo == best_combo:
-        # 이미 최고 CTR 조합 -> 유지 권장 + 더 세밀한 레버 하나를 보충 제안으로 사용
+        # 이미 최고 CTR 조합 -> 유지 권장(2위 조합과의 격차 명시) + 더 세밀한 레버 하나를 보충 제안으로 사용
+        second_combo, (second_ctr, second_n) = second_best_combo(agg, cur_combo)
+        gap = cur_combo_ctr - second_ctr
         result = [(
             f"현재 조합({item['type']}×{item['channel']})이 학습 데이터 내 최고 CTR 조합"
-            f"({cur_combo_ctr:.2f}%, n={agg['type_channel_ctr'][cur_combo][1]}건)이므로, "
-            f"포맷·채널을 변경하기보다 현재 조합을 유지하는 것을 권장합니다."
+            f"({cur_combo_ctr:.2f}%, {fmt_n(cur_combo_n)})이며, 2위 조합({second_combo[0]}×{second_combo[1]}, "
+            f"{second_ctr:.2f}%, {fmt_n(second_n)})보다 +{gap:.2f}%p 높습니다. 포맷·채널을 변경하기보다 "
+            f"현재 조합을 유지하는 것을 권장합니다."
         )]
         if detail_candidates:
             result.append(detail_candidates[0][1])
@@ -258,8 +286,8 @@ def build_suggestions(item, agg, clean):
                     if delta > 0:
                         result.append((
                             f"참고로 동일 조합({item['type']}×{item['channel']}) 내에서 '{best_topic}' 주제의 "
-                            f"평균 인게이지먼트율은 {best_er:.2f}%(n={best_n}건)로, 현재 주제 "
-                            f"'{item['topic_category']}'의 평균 {cur_er:.2f}%(n={cur_n}건)보다 높습니다 — "
+                            f"평균 인게이지먼트율은 {best_er:.2f}%({fmt_n(best_n)})로, 현재 주제 "
+                            f"'{item['topic_category']}'의 평균 {cur_er:.2f}%({fmt_n(cur_n)})보다 높습니다 — "
                             f"관련 스토리텔링 요소를 참고할 수 있습니다."
                         ))
         return result[:2]
@@ -267,13 +295,14 @@ def build_suggestions(item, agg, clean):
     result = [c[1] for c in detail_candidates[:2]]
     if len(result) < 2 and cur_combo_ctr is not None:
         best_ctr, best_n = agg["type_channel_ctr"][best_combo]
-        cur_n = agg["type_channel_ctr"][cur_combo][1]
         delta = best_ctr - cur_combo_ctr
         if delta > 0:
             result.append((
-                f"참고로 {best_combo[0]}×{best_combo[1]} 조합의 평균 CTR은 {best_ctr:.2f}%(n={best_n}건)로, "
-                f"현재 조합의 평균 CTR {cur_combo_ctr:.2f}%(n={cur_n}건)보다 높습니다 — 포맷·채널 전환을 "
-                f"검토할 수 있습니다."
+                f"참고로 {best_combo[0]}×{best_combo[1]} 조합의 평균 CTR은 {best_ctr:.2f}%({fmt_n(best_n)})로, "
+                f"현재 조합({item['type']}×{item['channel']})의 평균 CTR {cur_combo_ctr:.2f}%({fmt_n(cur_combo_n)})"
+                f"보다 +{delta:.2f}%p 높습니다. 다만 이는 발행 시간·이모지 조정과 달리 콘텐츠 형식 자체를 "
+                f"바꿔야 하는 더 큰 변화이므로, 세부 조정을 먼저 적용해보고 그래도 개선이 부족할 때 장기 "
+                f"검토 과제로 고려하는 것을 권장합니다."
             ))
     return result[:2]
 
@@ -292,8 +321,8 @@ def print_step1_patterns(agg):
     print("=== [1단계] 성과 패턴 집계 ===")
     print("[시간대별 평균 CTR]")
     for h in HOURS:
-        v = agg["hour_ctr"].get(h)
-        print(f"  {h}시: {v:.2f}%" if v is not None else f"  {h}시: 데이터 없음")
+        stat = agg["hour_ctr"].get(h)
+        print(f"  {h}시: {stat[0]:.2f}%(n={stat[1]})" if stat is not None else f"  {h}시: 데이터 없음")
 
     print("[이모지별 평균 CTR]")
     for flag in (True, False):
