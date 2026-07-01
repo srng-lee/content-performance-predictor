@@ -235,10 +235,9 @@ def build_suggestions(item, agg, clean):
     if cur_combo == best_combo:
         # 이미 최고 CTR 조합 -> 유지 권장 + 더 세밀한 레버 하나를 보충 제안으로 사용
         result = [(
-            f"(현재 조합이 이미 최고 성과 조합이라 '유지 권장'으로 제시) "
-            f"현재 조합({item['type']}×{item['channel']})은 학습 데이터 내 최고 CTR 조합"
-            f"({cur_combo_ctr:.2f}%, n={agg['type_channel_ctr'][cur_combo][1]}건)입니다 — "
-            f"포맷·채널 변경보다 현재 조합 유지를 권장합니다."
+            f"현재 조합({item['type']}×{item['channel']})이 학습 데이터 내 최고 CTR 조합"
+            f"({cur_combo_ctr:.2f}%, n={agg['type_channel_ctr'][cur_combo][1]}건)이라, "
+            f"포맷·채널을 바꾸기보다 지금 그대로 유지하는 것을 권장합니다."
         )]
         if detail_candidates:
             result.append(detail_candidates[0][1])
@@ -333,6 +332,24 @@ def describe_match_axes(candidate, item):
     return "·".join(matched) + "만 같았고"
 
 
+def describe_engagement_pattern(top3):
+    """TOP3의 CTR은 비슷한데 인게이지먼트율은 차이나는 경우, 그 사실을 해석 문장으로 만든다.
+    (CTR 스프레드가 작고 인게이지먼트율 스프레드가 상대적으로 큰 경우에만 등장 — 데이터에서 자동 판단)"""
+    if len(top3) < 2:
+        return None
+    ctrs = [c["ctr"] for c in top3]
+    ers = [c["engagement_rate"] for c in top3]
+    ctr_spread = max(ctrs) - min(ctrs)
+    er_spread = max(ers) - min(ers)
+    if ctr_spread <= 0.7 and er_spread >= 0.5:
+        return (
+            f"참고로 위 콘텐츠들은 CTR이 {min(ctrs):.1f}~{max(ctrs):.1f}%로 서로 큰 차이가 없었지만, "
+            f"인게이지먼트율은 {min(ers):.1f}~{max(ers):.1f}%로 콘텐츠마다 차이가 있었습니다 — 클릭은 "
+            f"비슷하게 됐어도 저장·공감으로 이어진 정도는 콘텐츠마다 달랐다는 뜻입니다."
+        )
+    return None
+
+
 def build_highlight(item, pool, top3, agg, confidence):
     """이 콘텐츠에서 어떤 특별한 판단이 필요했는지를 (상황/근거/결론) 3줄로, 아직 안 나온 내용을
     미리 언급하지 않고 그 자체로 이해되는 말로 설명한다."""
@@ -356,22 +373,45 @@ def build_highlight(item, pool, top3, agg, confidence):
         combo_ctr, combo_n = agg["type_channel_ctr"][cur_combo]
         situation = f"이 콘텐츠는 {cur_combo[0]}×{cur_combo[1]} 형식인데, 이 조합이 과거 데이터 전체에서 CTR이 가장 높았던 조합이었습니다."
         evidence = f"{cur_combo[0]}×{cur_combo[1]} 콘텐츠(과거 {combo_n}건)의 평균 CTR은 {combo_ctr:.2f}%로, 다른 어떤 형식·채널 조합보다 높았습니다."
-        conclusion = "그래서 형식이나 채널을 바꾸라고 제안하기보다, 발행 시간처럼 더 세밀한 부분을 조정하는 쪽으로 방향을 잡았습니다."
+        conclusion = "그래서 형식이나 채널을 바꾸라고 제안하기보다, 조금 더 세밀한 부분을 조정하는 쪽으로 방향을 잡았습니다."
+    elif item["channel"] == "블로그" and item["headline_length"] >= BLOG_HEADLINE_THRESHOLD:
+        situation = (
+            f"이 콘텐츠는 블로그 제목이 {item['headline_length']}자로, 과거 데이터에서 CTR이 크게 떨어지기 "
+            f"시작하는 기준선({BLOG_HEADLINE_THRESHOLD}자)을 이미 넘어선 상태입니다."
+        )
+        if confidence["qualified_count"] == len(pool):
+            evidence = f"그래도 형식(유형·채널)이 같은 과거 콘텐츠 {len(pool)}건 전부가 조건까지 비슷해 비교할 근거는 충분했습니다."
+        else:
+            evidence = (
+                f"그래도 형식(유형·채널)이 같은 과거 콘텐츠 {len(pool)}건 중 {confidence['qualified_count']}건은 "
+                f"조건까지 비슷해 비교할 근거는 충분했습니다."
+            )
+        conclusion = "그래서 비슷한 콘텐츠와 비교하는 것 자체는 안정적으로 됐지만, 제목 길이는 따로 짚어볼 필요가 있었습니다."
+    elif len(pool) < 10:
+        situation = (
+            f"이 콘텐츠와 형식(유형·채널)이 같은 과거 콘텐츠는 {len(pool)}건으로, 다른 신규 콘텐츠들보다 "
+            f"비교 대상의 폭이 좁은 편이었습니다."
+        )
+        if confidence["qualified_count"] == len(pool):
+            evidence = (
+                f"그래도 {len(pool)}건 전부 조건까지 비슷했고, 그중 {full_match}건은 주제·이모지 유무·발행 "
+                f"시간까지 전부 같아 판단 근거로 삼기엔 충분했습니다."
+            )
+        else:
+            evidence = (
+                f"그래도 그중 {confidence['qualified_count']}건은 조건까지 비슷했고, {full_match}건은 주제·이모지 "
+                f"유무·발행 시간까지 전부 같아 판단 근거로 삼기엔 충분했습니다."
+            )
+        conclusion = "그래서 후보 수는 적었지만 품질이 좋아 다른 콘텐츠와 같은 방식으로 비교해도 무리가 없었습니다."
     else:
         if full_match > 0:
             evidence = f"그중 {full_match}건은 주제·이모지 유무·발행 시간까지 전부 똑같아서 거의 쌍둥이 콘텐츠라고 볼 수 있었습니다."
         else:
             evidence = "주제·이모지 유무·발행 시간 중 여러 조건이 겹치는 콘텐츠가 다수 있었습니다."
-        if confidence["qualified_count"] == len(pool):
-            situation = (
-                f"이 콘텐츠와 형식(유형·채널)이 같은 과거 콘텐츠가 {len(pool)}건 있었는데, 전부 조건까지 "
-                f"비슷해서 비교할 근거가 충분했습니다."
-            )
-        else:
-            situation = (
-                f"이 콘텐츠와 형식(유형·채널)이 같은 과거 콘텐츠가 {len(pool)}건 있었는데, 그중 "
-                f"{confidence['qualified_count']}건은 조건까지 비슷해서 비교할 근거가 충분했습니다."
-            )
+        situation = (
+            f"이 콘텐츠와 형식(유형·채널)이 같은 과거 콘텐츠가 {len(pool)}건이나 있어, 비교할 대상이 풍부한 "
+            f"편이었습니다."
+        )
         conclusion = "그래서 별다른 예외 처리 없이 일반적인 방식 그대로 비교해도 믿을 만한 결과가 나왔습니다."
 
     return situation, evidence, conclusion
@@ -406,9 +446,9 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
     lines.append("## 예상 CTR 범위 산출 방식")
     lines.append("")
     lines.append(
-        "이 리포트는 ML 예측 모델이 아닙니다. 70건 규모의 적은 데이터로 정확한 숫자 하나를 콕 집어 예측하면 오히려 "
-        "믿기 어려우므로, 조건이 비슷한 과거 콘텐츠들의 실제 성과를 근거로 \"이 정도 범위에서 나올 것이다\"라고 "
-        "제시하는 방식을 씁니다."
+        f"이 리포트는 ML 예측 모델이 아닙니다. {len(clean)}건 규모의 적은 데이터로 정확한 숫자 하나를 콕 집어 "
+        "예측하면 오히려 믿기 어려우므로, 조건이 비슷한 과거 콘텐츠들의 실제 성과를 근거로 \"이 정도 범위에서 "
+        "나올 것이다\"라고 제시하는 방식을 씁니다."
     )
     lines.append("")
     lines.append("- 1단계: 조건이 가장 비슷한 과거 콘텐츠 3개(TOP3)를 찾습니다")
@@ -466,6 +506,10 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
                 f"{c['engagement_rate']:.1f}% | {score}/7 |"
             )
         lines.append("")
+        engagement_note = describe_engagement_pattern(top3)
+        if engagement_note:
+            lines.append(engagement_note)
+            lines.append("")
 
         if confidence["reason"] == "insufficient_pool":
             lines.append(
