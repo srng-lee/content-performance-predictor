@@ -142,12 +142,33 @@ def top3_similar(item, clean):
 
 
 def assess_confidence(item, pool):
-    """하드필터 통과 후보 중 유사도 LOW_CONFIDENCE_SCORE_THRESHOLD점 이상인 후보가 3건 미만이면
-    TOP3가 약한 후보로 채워졌다는 뜻이므로 저신뢰로 판단한다.
-    (전부 0~1점인 극단적 경우뿐 아니라, "1건만 강하고 나머지는 채우기용"인 경우도 포착하기 위해
-    기준을 "0건"이 아닌 "3건 미만"으로 잡았다 — 근거는 decisions.md 참고)"""
+    """저신뢰 원인을 "후보 수 부족"과 "저유사도" 두 가지로 구분해서 판단한다.
+    이 둘을 구분하지 않고 하나의 기준(qualified<3)으로 뭉치면, 후보가 2건뿐인데 그 2건이
+    전부 고유사도(예: 2/2)인 경우까지 "저유사도로 채워짐"이라고 잘못 표시하는 문제가 생긴다.
+
+    - reason="insufficient_pool": 하드필터 통과 후보 자체가 3건 미만이라 TOP3를 못 채움
+      (후보 품질과 무관하게 과거 데이터에 이 조합이 드문 것이 원인)
+    - reason="low_similarity": 후보는 3건 이상 있지만 유사도 LOW_CONFIDENCE_SCORE_THRESHOLD점
+      이상인 후보가 1건 이하라 TOP3 중 상당수가 약한 매칭으로 채워짐
+    - reason=None: 저신뢰 아님
+    """
     qualified = [r for r in pool if similarity_score(r, item) >= LOW_CONFIDENCE_SCORE_THRESHOLD]
-    return {"is_low_confidence": len(qualified) < 3, "qualified_count": len(qualified), "pool_size": len(pool)}
+    pool_size = len(pool)
+    qualified_count = len(qualified)
+
+    if pool_size < 3:
+        reason = "insufficient_pool"
+    elif qualified_count <= 1:
+        reason = "low_similarity"
+    else:
+        reason = None
+
+    return {
+        "is_low_confidence": reason is not None,
+        "reason": reason,
+        "qualified_count": qualified_count,
+        "pool_size": pool_size,
+    }
 
 
 # ---------- 3단계: 개선 제안 ----------
@@ -302,7 +323,13 @@ def build_highlight(item, pool, top3, agg, confidence):
     best_combo = max(agg["type_channel_ctr"], key=lambda k: agg["type_channel_ctr"][k][0])
     full_match = sum(1 for r in pool if similarity_score(r, item) == 7)
 
-    if confidence["is_low_confidence"]:
+    if confidence["reason"] == "insufficient_pool":
+        situation = (
+            f"하드필터 통과 후보가 {confidence['pool_size']}건뿐이라 TOP3를 채우지 못했습니다."
+        )
+        evidence = "과거 데이터 내 이 조합(type×channel) 자체가 드뭅니다 — 후보 품질이 아니라 표본 자체가 부족한 경우입니다."
+        conclusion = "저신뢰로 자동 판정해 경고 문구와 '추정 CTR 범위(신뢰도 낮음)'를 표시했습니다."
+    elif confidence["reason"] == "low_similarity":
         top_score = similarity_score(top3[0], item) if top3 else 0
         situation = (
             f"하드필터 통과 후보 {confidence['pool_size']}건 중 유사도 "
@@ -420,7 +447,19 @@ def render_report(new_rows, clean, agg, source_new_path, source_past_path):
             )
         lines.append("")
 
-        if confidence["is_low_confidence"]:
+        if confidence["reason"] == "insufficient_pool":
+            lines.append(
+                f"> ⚠️ **벤치마크 신뢰도 낮음**: 하드필터 통과 후보가 {confidence['pool_size']}건뿐이라 TOP3를 "
+                f"채우지 못했습니다. 과거 데이터 내 이 조합 자체가 드뭅니다. 아래는 참고용이며, 신뢰도가 낮음을 "
+                f"고려해 발행 후 실제 성과를 반드시 모니터링해야 합니다."
+            )
+            lines.append("")
+            lines.append(f"- **추정 CTR 범위(신뢰도 낮음): {ctr_min:.1f}% ~ {ctr_max:.1f}%**")
+            lines.append(
+                f"  - 근거: 하드필터 통과 후보 {len(top3)}건({', '.join(c['content_id'] for c in top3)})의 실제 "
+                f"CTR 최소~최대이나, TOP3를 채울 만큼 후보가 충분하지 않아 단순 참고 수치임."
+            )
+        elif confidence["reason"] == "low_similarity":
             lines.append(
                 f"> ⚠️ **벤치마크 신뢰도 낮음**: 하드필터 통과 후보 {confidence['pool_size']}건 중 유사도 "
                 f"{LOW_CONFIDENCE_SCORE_THRESHOLD}점 이상인 후보가 {confidence['qualified_count']}건뿐이라 "
